@@ -229,8 +229,13 @@ def index():
 
 @app.post("/transcribe")
 def transcribe():
+    expects_json = request.headers.get("X-Requested-With") == "fetch"
+
     upload = request.files.get("audio_file")
     if upload is None or upload.filename is None or not upload.filename.strip():
+        error_message = "Seleziona un file audio o video prima di avviare la trascrizione."
+        if expects_json:
+            return jsonify({"error": error_message}), 400
         return render_template(
             "index.html",
             allowed_extensions=", ".join(ALLOWED_EXTENSIONS),
@@ -239,10 +244,16 @@ def transcribe():
             default_ai_review_model=DEFAULT_AI_REVIEW_MODEL,
             current_job=None,
             result=None,
-            error="Seleziona un file audio o video prima di avviare la trascrizione.",
+            error=error_message,
         ), 400
 
     if not allowed_file(upload.filename):
+        error_message = (
+            "Formato non supportato. Carica uno di questi formati: "
+            + ", ".join(ALLOWED_EXTENSIONS)
+        )
+        if expects_json:
+            return jsonify({"error": error_message}), 400
         return render_template(
             "index.html",
             allowed_extensions=", ".join(ALLOWED_EXTENSIONS),
@@ -251,10 +262,7 @@ def transcribe():
             default_ai_review_model=DEFAULT_AI_REVIEW_MODEL,
             current_job=None,
             result=None,
-            error=(
-                "Formato non supportato. Carica uno di questi formati: "
-                + ", ".join(ALLOWED_EXTENSIONS)
-            ),
+            error=error_message,
         ), 400
 
     job_id = build_job_id()
@@ -314,6 +322,9 @@ def transcribe():
         )
         worker.start()
     except ValueError:
+        error_message = "I campi numerici non sono validi. Controlla beam size, best of, temperatura e speaker."
+        if expects_json:
+            return jsonify({"error": error_message}), 400
         return render_template(
             "index.html",
             allowed_extensions=", ".join(ALLOWED_EXTENSIONS),
@@ -322,9 +333,12 @@ def transcribe():
             default_ai_review_model=DEFAULT_AI_REVIEW_MODEL,
             current_job=None,
             result=None,
-            error="I campi numerici non sono validi. Controlla beam size, best of, temperatura e speaker.",
+            error=error_message,
         ), 400
     except Exception as exc:
+        error_message = f"Errore inatteso durante la trascrizione: {exc}"
+        if expects_json:
+            return jsonify({"error": error_message}), 500
         return render_template(
             "index.html",
             allowed_extensions=", ".join(ALLOWED_EXTENSIONS),
@@ -333,9 +347,16 @@ def transcribe():
             default_ai_review_model=DEFAULT_AI_REVIEW_MODEL,
             current_job=None,
             result=None,
-            error=f"Errore inatteso durante la trascrizione: {exc}",
+            error=error_message,
         ), 500
 
+    if expects_json:
+        return jsonify(
+            {
+                "job_id": job_id,
+                "job_url": url_for("job_page", job_id=job_id),
+            }
+        )
     return redirect(url_for("job_page", job_id=job_id))
 
 
