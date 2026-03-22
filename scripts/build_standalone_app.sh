@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+VENV_PY="$PROJECT_DIR/.venv/bin/python"
 VENV_PYINSTALLER="$PROJECT_DIR/.venv/bin/pyinstaller"
 SPEC_FILE="$PROJECT_DIR/Trascrizione Locale.spec"
 DIST_DIR="$PROJECT_DIR/dist"
@@ -15,6 +16,7 @@ cd "$PROJECT_DIR"
 
 rm -rf "$PROJECT_DIR/build" "$DIST_DIR"
 
+"$VENV_PY" "$PROJECT_DIR/scripts/generate_app_icon.py"
 "$VENV_PYINSTALLER" --noconfirm --clean "$SPEC_FILE"
 
 if [ ! -d "$APP_PATH" ]; then

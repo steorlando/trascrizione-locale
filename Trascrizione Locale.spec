@@ -13,6 +13,7 @@ from PyInstaller.utils.hooks import (
 
 
 project_dir = Path(SPECPATH)
+icon_path = project_dir / "assets" / "app_icon.icns"
 
 datas = [
     (str(project_dir / "templates"), "templates"),
@@ -112,7 +113,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="Trascrizione Locale.app",
-    icon=None,
+    icon=str(icon_path) if icon_path.exists() else None,
     bundle_identifier="local.transcription.app",
     info_plist={
         "CFBundleName": "Trascrizione Locale",
