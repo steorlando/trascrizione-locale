@@ -16,13 +16,46 @@
           L’esecuzione avviene in locale sul tuo computer usando la pipeline Python che abbiamo creato.
         </p>
         <p class="note">
-          Default consigliato: <strong>Massima accuratezza</strong>, che usa <strong>large-v3</strong>. Se scegli inglese e priorità velocità, l'app usa automaticamente <strong>distil-large-v3</strong>.
+          Default consigliato: <strong>Massima accuratezza</strong>, che usa <strong>large-v3</strong>. Se scegli priorità velocità, l'app usa automaticamente <strong>large-v3-turbo</strong>.
         </p>
         <p class="formats">Formati supportati: {{ allowed_extensions }}</p>
       </section>
 
       <section class="panel">
+        {% if success %}
+        <div class="alert success">{{ success }}</div>
+        {% endif %}
         <div class="alert error" id="form_error" {% if not error %}hidden{% endif %}>{{ error or '' }}</div>
+
+        {% if show_setup_panel %}
+        <section class="setup-card">
+          <div class="setup-copy">
+            <p class="eyebrow">Configurazione Iniziale</p>
+            <h2>Salva le chiavi una sola volta su questo Mac</h2>
+            <p class="lede">
+              Non includo le chiavi nello zip per sicurezza. Se vuoi usare revisione AI e diarizzazione, inseriscile qui al primo avvio: verranno salvate localmente e non dovrai più rimetterle.
+            </p>
+            <p class="hint">
+              `OPENAI_API_KEY` serve solo per la revisione finale del testo.
+              `HF_TOKEN` serve solo per la diarizzazione speaker.
+              Puoi anche lasciare i campi vuoti e continuare con la sola trascrizione base.
+            </p>
+          </div>
+          <form class="transcribe-form setup-form" action="{{ url_for('save_settings') }}" method="post">
+            <label class="field">
+              <span>OpenAI API key</span>
+              <input type="password" name="openai_api_key" placeholder="Opzionale, per punteggiatura e correzione AI" />
+            </label>
+            <label class="field">
+              <span>Hugging Face token</span>
+              <input type="password" name="hf_token" placeholder="Opzionale, per diarizzazione speaker" />
+            </label>
+            <div class="submit-row">
+              <button class="submit" type="submit">Salva configurazione</button>
+            </div>
+          </form>
+        </section>
+        {% endif %}
 
         <form class="transcribe-form" id="transcribe_form" action="{{ url_for('transcribe') }}" method="post" enctype="multipart/form-data">
           <label class="field">

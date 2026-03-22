@@ -10,7 +10,14 @@ from uuid import uuid4
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, url_for
 from werkzeug.utils import secure_filename
 
-from app_runtime import configure_runtime_environment, get_env_file_path, get_resource_dir, get_runtime_dir
+from app_runtime import (
+    configure_runtime_environment,
+    get_env_file_path,
+    get_resource_dir,
+    get_runtime_dir,
+    read_env_values,
+    write_env_values,
+)
 
 configure_runtime_environment()
 
@@ -86,6 +93,9 @@ def parse_optional_int(value: str | None) -> int | None:
 
 
 def render_context(**updates) -> dict:
+    stored_env = read_env_values()
+    has_openai_key = bool(stored_env.get("OPENAI_API_KEY"))
+    has_hf_token = bool(stored_env.get("HF_TOKEN"))
     context = {
         "allowed_extensions": ", ".join(ALLOWED_EXTENSIONS),
         "model_profiles": MODEL_PROFILES,
@@ -96,6 +106,10 @@ def render_context(**updates) -> dict:
         "current_job": None,
         "result": None,
         "error": None,
+        "success": None,
+        "has_openai_key": has_openai_key,
+        "has_hf_token": has_hf_token,
+        "show_setup_panel": not has_openai_key and not has_hf_token,
     }
     context.update(updates)
     return context
@@ -268,6 +282,39 @@ def run_job(
 @app.get("/")
 def index():
     return render_template("index.html", **render_context())
+
+
+@app.post("/settings/save")
+def save_settings():
+    openai_key = (request.form.get("openai_api_key") or "").strip()
+    hf_token = (request.form.get("hf_token") or "").strip()
+
+    write_env_values(
+        {
+            "OPENAI_API_KEY": openai_key,
+            "HF_TOKEN": hf_token,
+        }
+    )
+
+    if openai_key:
+        os.environ["OPENAI_API_KEY"] = openai_key
+    else:
+        os.environ.pop("OPENAI_API_KEY", None)
+
+    if hf_token:
+        os.environ["HF_TOKEN"] = hf_token
+        os.environ["HUGGINGFACE_TOKEN"] = hf_token
+    else:
+        os.environ.pop("HF_TOKEN", None)
+        os.environ.pop("HUGGINGFACE_TOKEN", None)
+
+    return render_template(
+        "index.html",
+        **render_context(
+            success="Configurazione salvata. Le chiavi resteranno memorizzate su questo Mac.",
+            show_setup_panel=False,
+        ),
+    )
 
 
 @app.post("/transcribe")

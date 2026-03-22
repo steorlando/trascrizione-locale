@@ -66,6 +66,31 @@ def get_example_env_path() -> Path:
     return get_runtime_dir() / ".env.local.example"
 
 
+def read_env_values(path: Path | None = None) -> dict[str, str]:
+    env_path = path or get_env_file_path()
+    values: dict[str, str] = {}
+    if not env_path.exists():
+        return values
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip("'").strip('"')
+    return values
+
+
+def write_env_values(values: dict[str, str], path: Path | None = None) -> Path:
+    env_path = path or get_env_file_path()
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["# Configurazione locale dell'app", ""]
+    for key in ("OPENAI_API_KEY", "HF_TOKEN"):
+        lines.append(f"{key}={values.get(key, '').strip()}")
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return env_path
+
+
 def ensure_runtime_layout() -> None:
     runtime_dir = get_runtime_dir()
     cache_dir = get_app_cache_dir() if is_frozen() else get_project_dir() / ".cache"

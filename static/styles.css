@@ -77,6 +77,29 @@ body {
   gap: 18px;
 }
 
+.setup-card {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 22px;
+  padding: 22px;
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, rgba(217, 240, 239, 0.72), rgba(248, 222, 216, 0.62));
+  border: 1px solid rgba(135, 181, 184, 0.28);
+}
+
+.setup-copy h2 {
+  margin: 8px 0 10px;
+  font-size: clamp(1.35rem, 2.2vw, 1.9rem);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+}
+
+.setup-form {
+  gap: 14px;
+}
+
 .submit-row {
   display: flex;
   align-items: center;
@@ -375,6 +398,12 @@ textarea {
   background: var(--error-bg);
   border: 1px solid var(--error-line);
   color: #9a4f3c;
+}
+
+.alert.success {
+  background: #edf9f6;
+  border: 1px solid #b7ddd6;
+  color: #2b6660;
 }
 
 @media (max-width: 800px) {
