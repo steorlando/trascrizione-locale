@@ -1,0 +1,17 @@
+.env.local
+.venv/
+__pycache__/
+.cache/
+web_uploads/
+web_runs/
+.DS_Store
+.Rhistory
+*.log
+.ui_server.pid
+build/
+dist/
+models/
+output_transcripts/
+*.app/
+=1.0,
+launch_ui.applescript

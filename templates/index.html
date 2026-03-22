@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trascrizione Locale</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="panel hero">
+        <p class="eyebrow">Trascrizione Locale</p>
+        <h1>Carica un file audio o video e ottieni il testo in `.txt`</h1>
+        <p class="lede">
+          Supporta più formati, inclusi <strong>.m4a</strong> dei memo vocali iPhone.
+          L’esecuzione avviene in locale sul tuo computer usando la pipeline Python che abbiamo creato.
+        </p>
+        <p class="note">
+          Default consigliato per l’italiano: <strong>Massima accuratezza</strong>, che usa <strong>large-v3</strong>.
+        </p>
+        <p class="formats">Formati supportati: {{ allowed_extensions }}</p>
+      </section>
+
+      <section class="panel">
+        {% if error %}
+        <div class="alert error">{{ error }}</div>
+        {% endif %}
+
+        <form class="transcribe-form" id="transcribe_form" action="{{ url_for('transcribe') }}" method="post" enctype="multipart/form-data">
+          <label class="field">
+            <span>File audio o video</span>
+            <input
+              type="file"
+              name="audio_file"
+              accept=".mp3,.m4a,.wav,.mp4,.mov,.mkv,.aac,.flac,.ogg"
+              required
+            />
+          </label>
+
+          <div class="grid">
+            <label class="field">
+              <span>Priorità</span>
+              <select name="quality_profile" id="quality_profile">
+                <option value="quality" selected>Massima accuratezza</option>
+                <option value="speed">Più veloce</option>
+                <option value="custom">Scelta manuale</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Modello</span>
+              <select name="model" id="model">
+                <option value="large-v3" selected>large-v3 · più accurato, più lento</option>
+                <option value="large-v3-turbo">large-v3-turbo · molto veloce, meno accurato</option>
+                <option value="medium">medium · più leggero, meno accurato</option>
+                <option value="small">small · rapido ma meno accurato</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Device</span>
+              <select name="device">
+                <option value="auto" selected>auto</option>
+                <option value="cpu">cpu</option>
+                <option value="cuda">cuda</option>
+              </select>
+            </label>
+          </div>
+
+          <p class="hint" id="profile_hint">
+            `Massima accuratezza` usa `large-v3`, consigliato quando la qualità è più importante della velocità.
+          </p>
+
+          <label class="field">
+            <span>Domain prompt</span>
+            <textarea
+              name="domain_prompt"
+              rows="4"
+              placeholder="sanità pubblica, epidemiologia, health economics, Tor Vergata, Sant’Egidio, Frontiers in Public Health"
+            ></textarea>
+          </label>
+
+          <div class="grid">
+            <label class="field">
+              <span class="field-title">
+                <span>Beam size</span>
+                <span
+                  class="info-chip"
+                  tabindex="0"
+                  aria-label="Informazioni su Beam size"
+                  data-tooltip="Controlla quante ipotesi il decoder confronta in parallelo. Valore piu alto: spesso piu accuratezza, ma piu lentezza. Consiglio: 5 come default, 6-8 solo se l'audio e difficile."
+                >i</span>
+              </span>
+              <input type="number" name="beam_size" min="1" value="5" />
+            </label>
+
+            <label class="field">
+              <span class="field-title">
+                <span>Best of</span>
+                <span
+                  class="info-chip"
+                  tabindex="0"
+                  aria-label="Informazioni su Best of"
+                  data-tooltip="Indica quante alternative vengono campionate prima di scegliere la migliore. E utile soprattutto quando la temperatura e maggiore di zero. Consiglio: 5 va bene quasi sempre."
+                >i</span>
+              </span>
+              <input type="number" name="best_of" min="1" value="5" />
+            </label>
+
+            <label class="field">
+              <span class="field-title">
+                <span>Temperatura</span>
+                <span
+                  class="info-chip"
+                  tabindex="0"
+                  aria-label="Informazioni su Temperatura"
+                  data-tooltip="Controlla quanto il modello sia conservativo o creativo. Valore basso: trascrizione piu stabile e fedele. Valore alto: piu flessibile, ma aumenta il rischio di errori o invenzioni. Consiglio: 0.0 per trascrizione pulita."
+                >i</span>
+              </span>
+              <input type="number" name="temperature" min="0" max="1" step="0.1" value="0.0" />
+            </label>
+          </div>
+
+          <div class="toggle-list">
+            <label class="toggle">
+              <input type="checkbox" name="enable_diarization" />
+              <span class="toggle-label">
+                <span>Attiva diarizzazione speaker</span>
+                <span
+                  class="warning-chip"
+                  tabindex="0"
+                  aria-label="Avviso sulla diarizzazione speaker"
+                  data-tooltip="Attenzione: con elaborazione su CPU la diarizzazione puo rallentare molto il processo, anche rispetto alla sola trascrizione. Attivala solo se ti serve davvero distinguere i parlanti."
+                >!</span>
+              </span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" name="enable_ai_review" id="enable_ai_review" />
+              <span>Rivedi il testo con AI per aggiungere punteggiatura e correggere errori evidenti</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" name="disable_preprocess" />
+              <span>Disattiva preprocessing audio</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" name="disable_noise_reduction" />
+              <span>Disattiva noise reduction</span>
+            </label>
+          </div>
+
+          <div class="grid">
+            <label class="field">
+              <span>Modello OpenAI revisione</span>
+              <select name="ai_review_model" id="ai_review_model" disabled>
+                {% for model_name in ai_review_models %}
+                <option value="{{ model_name }}" {% if model_name == default_ai_review_model %}selected{% endif %}>
+                  {{ model_name }}
+                </option>
+                {% endfor %}
+              </select>
+            </label>
+
+            <label class="field">
+              <span>HF token per diarizzazione</span>
+              <input type="password" name="hf_token" placeholder="Necessario solo se attivi la diarizzazione" />
+            </label>
+
+            <label class="field">
+              <span>Numero speaker esatto</span>
+              <input type="number" name="num_speakers" min="1" placeholder="Opzionale" />
+            </label>
+          </div>
+
+          <p class="hint" id="ai_review_hint">
+            Revisione AI facoltativa: usa OpenAI solo sul testo trascritto finale, non sull’audio. Default consigliato: `gpt-4.1-mini`.
+          </p>
+
+          <div class="grid">
+            <label class="field">
+              <span>Min speaker</span>
+              <input type="number" name="min_speakers" min="1" placeholder="Opzionale" />
+            </label>
+
+            <label class="field">
+              <span>Max speaker</span>
+              <input type="number" name="max_speakers" min="1" placeholder="Opzionale" />
+            </label>
+          </div>
+
+          <div class="submit-row">
+            <button class="submit" id="submit_button" type="submit">Trascrivi in locale</button>
+            <p class="submit-state" id="submit_state" hidden>Upload inviato. Sto avviando la trascrizione...</p>
+          </div>
+        </form>
+      </section>
+
+      {% if current_job and current_job.status != 'error' and not result %}
+      <section class="panel progress-panel" data-job-id="{{ current_job.job_id }}">
+        <div class="result-head">
+          <div>
+            <p class="eyebrow">Trascrizione In Corso</p>
+            <h2>{{ current_job.input_name }}</h2>
+            <p class="meta" id="job_meta">
+              Stato: <strong id="job_status_label">{{ current_job.status }}</strong>
+              {% if current_job.stage %}
+              · Fase: <strong id="job_stage_label">{{ current_job.stage }}</strong>
+              {% endif %}
+            </p>
+          </div>
+        </div>
+
+        <div class="progress-shell" aria-live="polite" aria-busy="true">
+          <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ current_job.percent or 0 }}">
+            <div class="progress-fill" id="progress_fill" style="width: {{ current_job.percent or 0 }}%"></div>
+          </div>
+          <div class="progress-copy">
+            <strong id="progress_percent">{{ current_job.percent or 0 }}%</strong>
+            <span id="progress_message">{{ current_job.message or 'Trascrizione in preparazione...' }}</span>
+          </div>
+          <p class="hint">La barra avanza per fasi reali della pipeline: preparazione audio, trascrizione, diarizzazione e salvataggio output.</p>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if result %}
+      <section class="panel result">
+        <div class="result-head">
+          <div>
+            <p class="eyebrow">Risultato</p>
+            <h2>{{ result.input_name }}</h2>
+            <p class="meta">
+              Modello: <strong>{{ result.model }}</strong> · Profilo: <strong>{{ result.quality_profile_label }}</strong> · Device: <strong>{{ result.device }}</strong> ·
+              Diarizzazione: <strong>{{ 'attiva' if result.diarization_enabled else 'disattiva' }}</strong> ·
+              Revisione AI: <strong>{{ result.ai_review_model if result.ai_review_enabled else 'disattiva' }}</strong>
+            </p>
+          </div>
+          <div class="actions">
+            <a class="download primary" href="{{ url_for('download_file', job_id=result.job_id, file_kind='txt') }}">Scarica TXT</a>
+            <a class="download" href="{{ url_for('download_file', job_id=result.job_id, file_kind='srt') }}">SRT</a>
+            <a class="download" href="{{ url_for('download_file', job_id=result.job_id, file_kind='json') }}">JSON</a>
+            {% if result.raw_txt_name %}
+            <a class="download" href="{{ url_for('download_file', job_id=result.job_id, file_kind='raw_txt') }}">TXT grezzo</a>
+            {% endif %}
+          </div>
+        </div>
+
+        <label class="field">
+          <span>Anteprima trascrizione</span>
+          <textarea rows="18" readonly>{{ result.transcript }}</textarea>
+        </label>
+      </section>
+      {% endif %}
+    </main>
+    <script>
+      const transcribeForm = document.getElementById("transcribe_form");
+      const submitButton = document.getElementById("submit_button");
+      const submitState = document.getElementById("submit_state");
+      const profileSelect = document.getElementById("quality_profile");
+      const modelSelect = document.getElementById("model");
+      const profileHint = document.getElementById("profile_hint");
+      const aiReviewCheckbox = document.getElementById("enable_ai_review");
+      const aiReviewModel = document.getElementById("ai_review_model");
+      const aiReviewHint = document.getElementById("ai_review_hint");
+      const progressPanel = document.querySelector("[data-job-id]");
+      const progressFill = document.getElementById("progress_fill");
+      const progressPercent = document.getElementById("progress_percent");
+      const progressMessage = document.getElementById("progress_message");
+      const jobStatusLabel = document.getElementById("job_status_label");
+      const jobStageLabel = document.getElementById("job_stage_label");
+
+      if (transcribeForm && submitButton && submitState) {
+        transcribeForm.addEventListener("submit", () => {
+          submitButton.setAttribute("disabled", "disabled");
+          submitButton.textContent = "Avvio in corso...";
+          submitState.hidden = false;
+        });
+      }
+
+      if (profileSelect && modelSelect && profileHint) {
+        const profiles = {
+          quality: {
+            model: "large-v3",
+            hint: "`Massima accuratezza` usa `large-v3`, consigliato quando la qualità è più importante della velocità."
+          },
+          speed: {
+            model: "large-v3-turbo",
+            hint: "`Più veloce` usa `large-v3-turbo`, che resta multilingua ed è più adatto dell’opzione distillata per audio in italiano."
+          },
+          custom: {
+            model: modelSelect.value,
+            hint: "`Scelta manuale` ti lascia decidere esattamente quale modello usare."
+          }
+        };
+
+        const syncProfileUi = () => {
+          const selected = profiles[profileSelect.value] || profiles.quality;
+          if (profileSelect.value !== "custom") {
+            modelSelect.value = selected.model;
+            modelSelect.setAttribute("disabled", "disabled");
+          } else {
+            modelSelect.removeAttribute("disabled");
+          }
+          profileHint.textContent = selected.hint;
+        };
+
+        profileSelect.addEventListener("change", syncProfileUi);
+        syncProfileUi();
+      }
+
+      if (aiReviewCheckbox && aiReviewModel && aiReviewHint) {
+        const syncAiReviewUi = () => {
+          if (aiReviewCheckbox.checked) {
+            aiReviewModel.removeAttribute("disabled");
+            aiReviewHint.textContent = "La revisione AI e attiva: il testo finale verra ripulito da OpenAI con correzioni conservative e punteggiatura.";
+          } else {
+            aiReviewModel.setAttribute("disabled", "disabled");
+            aiReviewHint.textContent = "Revisione AI facoltativa: usa OpenAI solo sul testo trascritto finale, non sull’audio. Default consigliato: `gpt-4.1-mini`.";
+          }
+        };
+
+        aiReviewCheckbox.addEventListener("change", syncAiReviewUi);
+        syncAiReviewUi();
+      }
+
+      if (progressPanel && progressFill && progressPercent && progressMessage) {
+        const jobId = progressPanel.dataset.jobId;
+
+        const refreshJob = async () => {
+          const response = await fetch(`/api/jobs/${jobId}`, {
+            headers: { "Accept": "application/json" },
+            cache: "no-store"
+          });
+          if (!response.ok) {
+            return;
+          }
+
+          const data = await response.json();
+          const percent = Number(data.percent || 0);
+          progressFill.style.width = `${percent}%`;
+          progressPercent.textContent = `${percent}%`;
+          progressMessage.textContent = data.message || "Trascrizione in corso...";
+
+          if (jobStatusLabel) {
+            jobStatusLabel.textContent = data.status || "running";
+          }
+          if (jobStageLabel && data.stage) {
+            jobStageLabel.textContent = data.stage;
+          }
+
+          if (data.status === "completed") {
+            window.location.reload();
+            return;
+          }
+
+          if (data.status === "error") {
+            window.location.reload();
+            return;
+          }
+
+          window.setTimeout(refreshJob, 1400);
+        };
+
+        window.setTimeout(refreshJob, 900);
+      }
+    </script>
+  </body>
+</html>

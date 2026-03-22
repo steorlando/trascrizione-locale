@@ -1,0 +1,380 @@
+:root {
+  --bg: #f6f1e8;
+  --panel: #fffaf2;
+  --ink: #1c1a17;
+  --muted: #645a4f;
+  --line: #d9c9b3;
+  --accent: #b5542f;
+  --accent-dark: #8a3f23;
+  --error-bg: #fde7e1;
+  --error-line: #dc8d79;
+  --shadow: 0 20px 50px rgba(95, 61, 37, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(181, 84, 47, 0.15), transparent 30%),
+    linear-gradient(180deg, #f3ecdf 0%, var(--bg) 100%);
+  color: var(--ink);
+}
+
+.page {
+  width: min(1100px, calc(100vw - 32px));
+  margin: 32px auto 56px;
+  display: grid;
+  gap: 20px;
+}
+
+.panel {
+  background: color-mix(in srgb, var(--panel) 92%, white);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+
+.hero h1,
+.result h2 {
+  margin: 8px 0 12px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 0.96;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.76rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.lede,
+.note,
+.formats,
+.meta {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.transcribe-form {
+  display: grid;
+  gap: 18px;
+}
+
+.submit-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.submit-state {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field span {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.field-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #ead7bc;
+  color: var(--accent-dark);
+  font-size: 0.84rem;
+  font-weight: 800;
+  cursor: help;
+  outline: none;
+}
+
+.info-chip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  width: min(280px, 70vw);
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #1f1a16;
+  color: #fff8ef;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 20;
+}
+
+.info-chip:hover::after,
+.info-chip:focus::after {
+  opacity: 1;
+}
+
+input,
+select,
+textarea,
+button,
+.download {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fffdf8;
+  color: var(--ink);
+  padding: 14px 16px;
+}
+
+select:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.toggle-list {
+  display: grid;
+  gap: 10px;
+}
+
+.hint {
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.progress-panel {
+  overflow: hidden;
+}
+
+.progress-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 18px;
+  border-radius: 999px;
+  background: #eadcc8;
+  overflow: hidden;
+  border: 1px solid #d8c2a2;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0;
+  background:
+    linear-gradient(90deg, #b5542f 0%, #d17b36 52%, #ebb15f 100%);
+  transition: width 400ms ease;
+}
+
+.progress-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  color: var(--muted);
+}
+
+.progress-copy strong {
+  color: var(--ink);
+  font-size: 1.2rem;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle input {
+  width: auto;
+  transform: scale(1.15);
+}
+
+.warning-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #f3d9a6;
+  color: #8a4b00;
+  font-size: 0.9rem;
+  font-weight: 900;
+  cursor: help;
+  outline: none;
+}
+
+.warning-chip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  width: min(300px, 74vw);
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #3a2711;
+  color: #fff8ef;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 20;
+}
+
+.warning-chip:hover::after,
+.warning-chip:focus::after {
+  opacity: 1;
+}
+
+.submit,
+.download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  border-radius: 999px;
+  border: 0;
+  padding: 0 22px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.submit,
+.download.primary {
+  background: var(--accent);
+  color: white;
+}
+
+.download {
+  background: #efe1cc;
+  color: var(--ink);
+}
+
+.submit:hover,
+.download:hover {
+  transform: translateY(-1px);
+}
+
+.submit:hover,
+.download.primary:hover {
+  background: var(--accent-dark);
+}
+
+.submit:disabled {
+  opacity: 0.75;
+  cursor: progress;
+  transform: none;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.result-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.alert {
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.alert.error {
+  background: var(--error-bg);
+  border: 1px solid var(--error-line);
+  color: #7b2f1f;
+}
+
+@media (max-width: 800px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .result-head {
+    flex-direction: column;
+  }
+
+  .progress-copy {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .page {
+    width: min(100vw - 20px, 1100px);
+    margin: 18px auto 36px;
+  }
+
+  .panel {
+    padding: 18px;
+    border-radius: 20px;
+  }
+}
