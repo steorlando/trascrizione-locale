@@ -295,211 +295,281 @@
       {% endif %}
     </main>
     <script>
-      const transcribeForm = document.getElementById("transcribe_form");
-      const submitButton = document.getElementById("submit_button");
-      const submitState = document.getElementById("submit_state");
-      const formError = document.getElementById("form_error");
-      const languageSelect = document.getElementById("language");
-      const profileSelect = document.getElementById("quality_profile");
-      const modelSelect = document.getElementById("model");
-      const profileHint = document.getElementById("profile_hint");
-      const aiReviewCheckbox = document.getElementById("enable_ai_review");
-      const aiReviewModel = document.getElementById("ai_review_model");
-      const aiReviewHint = document.getElementById("ai_review_hint");
-      const progressPanel = document.querySelector("[data-job-id]");
-      const progressFill = document.getElementById("progress_fill");
-      const progressPercent = document.getElementById("progress_percent");
-      const progressMessage = document.getElementById("progress_message");
-      const jobStatusLabel = document.getElementById("job_status_label");
-      const jobStageLabel = document.getElementById("job_stage_label");
-      const downloadLinks = document.querySelectorAll(".download[data-job-id][data-file-kind]");
+      const profileChoices = {{ model_profile_choices | tojson }};
+      let progressTimer = null;
 
-      if (transcribeForm && submitButton && submitState) {
-        transcribeForm.addEventListener("submit", async (event) => {
-          event.preventDefault();
+      const stopProgressTimer = () => {
+        if (progressTimer) {
+          window.clearTimeout(progressTimer);
+          progressTimer = null;
+        }
+      };
 
-          if (formError) {
-            formError.hidden = true;
-            formError.textContent = "";
-          }
+      const replaceMainFromHtml = (html, url) => {
+        const parser = new DOMParser();
+        const parsed = parser.parseFromString(html, "text/html");
+        const nextMain = parsed.querySelector("main.page");
+        const currentMain = document.querySelector("main.page");
+        if (!nextMain || !currentMain) {
+          throw new Error("Aggiornamento pagina non riuscito.");
+        }
 
-          submitButton.setAttribute("disabled", "disabled");
-          submitButton.textContent = "Avvio in corso...";
-          submitState.hidden = false;
+        stopProgressTimer();
+        currentMain.innerHTML = nextMain.innerHTML;
+        if (url) {
+          window.history.replaceState({}, "", url);
+        }
+        initializeUi();
+      };
 
-          try {
-            const response = await fetch(transcribeForm.action, {
-              method: "POST",
-              body: new FormData(transcribeForm),
-              headers: {
-                "Accept": "application/json",
-                "X-Requested-With": "fetch"
-              }
-            });
+      const loadPageIntoMain = async (url) => {
+        const response = await fetch(url, {
+          headers: { "Accept": "text/html" },
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          throw new Error("Aggiornamento interfaccia non riuscito.");
+        }
+        const html = await response.text();
+        replaceMainFromHtml(html, url);
+      };
 
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok || !data.job_url) {
-              throw new Error(data.error || "La trascrizione non e partita correttamente.");
-            }
+      const initializeUi = () => {
+        const setupForm = document.querySelector("form.setup-form");
+        const transcribeForm = document.getElementById("transcribe_form");
+        const submitButton = document.getElementById("submit_button");
+        const submitState = document.getElementById("submit_state");
+        const formError = document.getElementById("form_error");
+        const languageSelect = document.getElementById("language");
+        const profileSelect = document.getElementById("quality_profile");
+        const modelSelect = document.getElementById("model");
+        const profileHint = document.getElementById("profile_hint");
+        const aiReviewCheckbox = document.getElementById("enable_ai_review");
+        const aiReviewModel = document.getElementById("ai_review_model");
+        const aiReviewHint = document.getElementById("ai_review_hint");
+        const progressPanel = document.querySelector(".progress-panel[data-job-id]");
+        const progressFill = document.getElementById("progress_fill");
+        const progressPercent = document.getElementById("progress_percent");
+        const progressMessage = document.getElementById("progress_message");
+        const jobStatusLabel = document.getElementById("job_status_label");
+        const jobStageLabel = document.getElementById("job_stage_label");
+        const downloadLinks = document.querySelectorAll(".download[data-job-id][data-file-kind]");
 
-            window.location.assign(data.job_url);
-          } catch (error) {
-            submitButton.removeAttribute("disabled");
-            submitButton.textContent = "Trascrivi in locale";
-            submitState.hidden = true;
+        if (setupForm) {
+          setupForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
 
             if (formError) {
-              formError.textContent = error.message || "Errore inatteso durante l'avvio della trascrizione.";
-              formError.hidden = false;
+              formError.hidden = true;
+              formError.textContent = "";
             }
+
+            try {
+              const response = await fetch(setupForm.action, {
+                method: "POST",
+                body: new FormData(setupForm),
+                headers: { "Accept": "text/html" }
+              });
+              if (!response.ok) {
+                throw new Error("Salvataggio configurazione non riuscito.");
+              }
+              const html = await response.text();
+              replaceMainFromHtml(html, window.location.pathname);
+            } catch (error) {
+              if (formError) {
+                formError.textContent = error.message || "Salvataggio configurazione non riuscito.";
+                formError.hidden = false;
+              }
+            }
+          });
+        }
+
+        if (transcribeForm && submitButton && submitState) {
+          transcribeForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            if (formError) {
+              formError.hidden = true;
+              formError.textContent = "";
+            }
+
+            submitButton.setAttribute("disabled", "disabled");
+            submitButton.textContent = "Avvio in corso...";
+            submitState.hidden = false;
+
+            try {
+              const response = await fetch(transcribeForm.action, {
+                method: "POST",
+                body: new FormData(transcribeForm),
+                headers: {
+                  "Accept": "application/json",
+                  "X-Requested-With": "fetch"
+                }
+              });
+
+              const data = await response.json().catch(() => ({}));
+              if (!response.ok || !data.job_url) {
+                throw new Error(data.error || "La trascrizione non e partita correttamente.");
+              }
+
+              await loadPageIntoMain(data.job_url);
+            } catch (error) {
+              submitButton.removeAttribute("disabled");
+              submitButton.textContent = "Trascrivi in locale";
+              submitState.hidden = true;
+
+              if (formError) {
+                formError.textContent = error.message || "Errore inatteso durante l'avvio della trascrizione.";
+                formError.hidden = false;
+              }
+            }
+          });
+        }
+
+        if (profileSelect && modelSelect && profileHint) {
+          const buildProfiles = (languageCode) => {
+            const languageProfiles = profileChoices[languageCode] || profileChoices.it;
+            return {
+              quality: {
+                model: languageProfiles.quality.model,
+                hint: `Massima accuratezza usa ${languageProfiles.quality.model}, consigliato quando la qualità è più importante della velocità.`
+              },
+              speed: {
+                model: languageProfiles.speed.model,
+                hint: `Più veloce usa ${languageProfiles.speed.model}.`
+              },
+              custom: {
+                model: modelSelect.value,
+                hint: "`Scelta manuale` ti lascia decidere esattamente quale modello usare."
+              }
+            };
+          };
+
+          let profiles = buildProfiles(languageSelect ? languageSelect.value : "it");
+
+          const syncProfileUi = () => {
+            const languageCode = languageSelect ? languageSelect.value : "it";
+            profiles = buildProfiles(languageCode);
+            const selected = profiles[profileSelect.value] || profiles.quality;
+            if (profileSelect.value !== "custom") {
+              modelSelect.value = selected.model;
+              modelSelect.setAttribute("disabled", "disabled");
+            } else {
+              modelSelect.removeAttribute("disabled");
+            }
+            profileHint.textContent = selected.hint;
+          };
+
+          profileSelect.addEventListener("change", syncProfileUi);
+          if (languageSelect) {
+            languageSelect.addEventListener("change", syncProfileUi);
           }
-        });
-      }
+          syncProfileUi();
+        }
 
-      if (profileSelect && modelSelect && profileHint) {
-        const profileChoices = {{ model_profile_choices | tojson }};
-        const defaultLanguage = languageSelect ? languageSelect.value : "it";
-
-        const buildProfiles = (languageCode) => {
-          const languageProfiles = profileChoices[languageCode] || profileChoices.it;
-          return {
-            quality: {
-              model: languageProfiles.quality.model,
-              hint: `Massima accuratezza usa ${languageProfiles.quality.model}, consigliato quando la qualità è più importante della velocità.`
-            },
-            speed: {
-              model: languageProfiles.speed.model,
-              hint: `Più veloce usa ${languageProfiles.speed.model}.`
-            },
-            custom: {
-              model: modelSelect.value,
-              hint: "`Scelta manuale` ti lascia decidere esattamente quale modello usare."
+        if (aiReviewCheckbox && aiReviewModel && aiReviewHint) {
+          const syncAiReviewUi = () => {
+            const languageCode = languageSelect ? languageSelect.value : "it";
+            const languageLabel = languageCode === "en" ? "English" : "italiano";
+            if (aiReviewCheckbox.checked) {
+              aiReviewModel.removeAttribute("disabled");
+              aiReviewHint.textContent = `La revisione AI e attiva: il testo finale verra ripulito da OpenAI come trascrizione in ${languageLabel}, con correzioni conservative e punteggiatura.`;
+            } else {
+              aiReviewModel.setAttribute("disabled", "disabled");
+              aiReviewHint.textContent = `Revisione AI facoltativa: usa OpenAI solo sul testo trascritto finale, non sull’audio, e segue la lingua scelta (${languageLabel}). Default consigliato: gpt-4.1-mini.`;
             }
           };
-        };
 
-        let profiles = buildProfiles(defaultLanguage);
-
-        const syncProfileUi = () => {
-          const languageCode = languageSelect ? languageSelect.value : "it";
-          profiles = buildProfiles(languageCode);
-          const selected = profiles[profileSelect.value] || profiles.quality;
-          if (profileSelect.value !== "custom") {
-            modelSelect.value = selected.model;
-            modelSelect.setAttribute("disabled", "disabled");
-          } else {
-            modelSelect.removeAttribute("disabled");
+          aiReviewCheckbox.addEventListener("change", syncAiReviewUi);
+          if (languageSelect) {
+            languageSelect.addEventListener("change", syncAiReviewUi);
           }
-          profileHint.textContent = selected.hint;
-        };
-
-        profileSelect.addEventListener("change", syncProfileUi);
-        if (languageSelect) {
-          languageSelect.addEventListener("change", syncProfileUi);
+          syncAiReviewUi();
         }
-        syncProfileUi();
-      }
 
-      if (aiReviewCheckbox && aiReviewModel && aiReviewHint) {
-        const syncAiReviewUi = () => {
-          const languageCode = languageSelect ? languageSelect.value : "it";
-          const languageLabel = languageCode === "en" ? "English" : "italiano";
-          if (aiReviewCheckbox.checked) {
-            aiReviewModel.removeAttribute("disabled");
-            aiReviewHint.textContent = `La revisione AI e attiva: il testo finale verra ripulito da OpenAI come trascrizione in ${languageLabel}, con correzioni conservative e punteggiatura.`;
-          } else {
-            aiReviewModel.setAttribute("disabled", "disabled");
-            aiReviewHint.textContent = `Revisione AI facoltativa: usa OpenAI solo sul testo trascritto finale, non sull’audio, e segue la lingua scelta (${languageLabel}). Default consigliato: gpt-4.1-mini.`;
-          }
-        };
+        if (progressPanel && progressFill && progressPercent && progressMessage) {
+          const jobId = progressPanel.dataset.jobId;
 
-        aiReviewCheckbox.addEventListener("change", syncAiReviewUi);
-        if (languageSelect) {
-          languageSelect.addEventListener("change", syncAiReviewUi);
+          const refreshJob = async () => {
+            try {
+              const response = await fetch(`/api/jobs/${jobId}`, {
+                headers: { "Accept": "application/json" },
+                cache: "no-store"
+              });
+              if (!response.ok) {
+                return;
+              }
+
+              const data = await response.json();
+              const percent = Number(data.percent || 0);
+              progressFill.style.width = `${percent}%`;
+              progressPercent.textContent = `${percent}%`;
+              progressMessage.textContent = data.message || "Trascrizione in corso...";
+
+              if (jobStatusLabel) {
+                jobStatusLabel.textContent = data.status || "running";
+              }
+              if (jobStageLabel && data.stage) {
+                jobStageLabel.textContent = data.stage;
+              }
+
+              if (data.status === "completed" || data.status === "error") {
+                await loadPageIntoMain(`/jobs/${jobId}`);
+                return;
+              }
+
+              progressTimer = window.setTimeout(refreshJob, 1400);
+            } catch (_error) {
+              progressTimer = window.setTimeout(refreshJob, 1800);
+            }
+          };
+
+          stopProgressTimer();
+          progressTimer = window.setTimeout(refreshJob, 900);
         }
-        syncAiReviewUi();
-      }
 
-      if (progressPanel && progressFill && progressPercent && progressMessage) {
-        const jobId = progressPanel.dataset.jobId;
-
-        const refreshJob = async () => {
-          const response = await fetch(`/api/jobs/${jobId}`, {
-            headers: { "Accept": "application/json" },
-            cache: "no-store"
-          });
-          if (!response.ok) {
-            return;
-          }
-
-          const data = await response.json();
-          const percent = Number(data.percent || 0);
-          progressFill.style.width = `${percent}%`;
-          progressPercent.textContent = `${percent}%`;
-          progressMessage.textContent = data.message || "Trascrizione in corso...";
-
-          if (jobStatusLabel) {
-            jobStatusLabel.textContent = data.status || "running";
-          }
-          if (jobStageLabel && data.stage) {
-            jobStageLabel.textContent = data.stage;
-          }
-
-          if (data.status === "completed") {
-            window.location.reload();
-            return;
-          }
-
-          if (data.status === "error") {
-            window.location.reload();
-            return;
-          }
-
-          window.setTimeout(refreshJob, 1400);
-        };
-
-        window.setTimeout(refreshJob, 900);
-      }
-
-      if (downloadLinks.length > 0) {
-        const desktopDownload = async (event) => {
-          const link = event.currentTarget;
-          if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.save_output_file) {
-            return;
-          }
-
-          event.preventDefault();
-          const originalLabel = link.textContent;
-          link.textContent = "Salvataggio...";
-          link.classList.add("disabled");
-
-          try {
-            const result = await window.pywebview.api.save_output_file(
-              link.dataset.jobId,
-              link.dataset.fileKind
-            );
-
-            if (!result || result.cancelled) {
+        if (downloadLinks.length > 0) {
+          const desktopDownload = async (event) => {
+            const link = event.currentTarget;
+            if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.save_output_file) {
               return;
             }
-            if (!result.ok) {
-              throw new Error(result.error || "Salvataggio non riuscito.");
-            }
-          } catch (error) {
-            if (formError) {
-              formError.textContent = error.message || "Salvataggio non riuscito.";
-              formError.hidden = false;
-            }
-          } finally {
-            link.textContent = originalLabel;
-            link.classList.remove("disabled");
-          }
-        };
 
-        downloadLinks.forEach((link) => {
-          link.addEventListener("click", desktopDownload);
-        });
-      }
+            event.preventDefault();
+            const originalLabel = link.textContent;
+            link.textContent = "Salvataggio...";
+            link.classList.add("disabled");
+
+            try {
+              const result = await window.pywebview.api.save_output_file(
+                link.dataset.jobId,
+                link.dataset.fileKind
+              );
+
+              if (!result || result.cancelled) {
+                return;
+              }
+              if (!result.ok) {
+                throw new Error(result.error || "Salvataggio non riuscito.");
+              }
+            } catch (error) {
+              if (formError) {
+                formError.textContent = error.message || "Salvataggio non riuscito.";
+                formError.hidden = false;
+              }
+            } finally {
+              link.textContent = originalLabel;
+              link.classList.remove("disabled");
+            }
+          };
+
+          downloadLinks.forEach((link) => {
+            link.addEventListener("click", desktopDownload);
+          });
+        }
+      };
+
+      initializeUi();
     </script>
   </body>
 </html>
