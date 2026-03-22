@@ -69,6 +69,10 @@ SUPPORTED_AI_REVIEW_MODELS = {
     "gpt-4.1-mini",
     "gpt-4.1-nano",
 }
+SUPPORTED_UI_LANGUAGES = {
+    "it": "Italiano",
+    "en": "English",
+}
 
 
 def notify_progress(
@@ -238,6 +242,15 @@ def import_openai() -> Any:
 
 
 def detect_device(explicit_device: str) -> str:
+    if explicit_device == "cuda":
+        torch = import_torch()
+        if torch.cuda.is_available():
+            return "cuda"
+        raise PipelineError(
+            "Hai selezionato CUDA, ma in questo ambiente non è disponibile. "
+            "Su questo Mac usa `auto` o `cpu`."
+        )
+
     if explicit_device != "auto":
         return explicit_device
 
@@ -478,6 +491,7 @@ def build_clean_text(segments: Iterable[SegmentRecord], include_speakers: bool) 
 def review_transcript_with_openai(
     text: str,
     model: str,
+    language: str,
     domain_prompt: Optional[str],
     progress_callback: ProgressCallback = None,
 ) -> Tuple[str, Dict[str, Any]]:
@@ -498,28 +512,30 @@ def review_transcript_with_openai(
     OpenAI = import_openai()
     client = OpenAI(api_key=api_key)
 
+    language_name = SUPPORTED_UI_LANGUAGES.get(language, language)
     domain_note = (
-        "Termini o nomi da trattare con particolare attenzione: "
+        "Terms or names to treat with extra care: "
         f"{domain_prompt.strip()}"
         if domain_prompt
-        else "Non sono stati forniti termini di dominio aggiuntivi."
+        else "No extra domain terms were provided."
     )
 
     instructions = (
-        "Sei un revisore conservativo di trascrizioni italiane. "
-        "Devi migliorare il testo senza riscriverlo. "
-        "Aggiungi punteggiatura, maiuscole e capoversi dove servono. "
-        "Correggi solo errori ortografici o lessicali molto evidenti. "
-        "Non riassumere. Non parafrasare. Non rendere il testo piu elegante. "
-        "Non cambiare significato. Non inventare contenuti mancanti. "
-        "Preserva esattamente eventuali etichette speaker come SPEAKER_00, SPEAKER_01 e simili. "
-        "Mantieni il lessico tecnico e i nomi propri se plausibili. "
-        "Restituisci soltanto il testo finale corretto, senza commenti o note."
+        f"You are a conservative transcript editor for {language_name}. "
+        "Improve the text without rewriting it. "
+        "Add punctuation, capitalization, and paragraph breaks where needed. "
+        "Correct only very obvious spelling or lexical errors. "
+        "Do not summarize. Do not paraphrase. Do not make the text more elegant. "
+        "Do not change meaning. Do not invent missing content. "
+        "Preserve speaker labels exactly as written, including SPEAKER_00, SPEAKER_01, and similar tags. "
+        "Keep technical terminology, acronyms, and plausible proper nouns intact. "
+        "Return only the final corrected text, with no notes or commentary."
     )
 
     user_input = (
+        f"Target language: {language_name}\n"
         f"{domain_note}\n\n"
-        "Testo da correggere in modo minimale:\n\n"
+        "Transcript to correct minimally:\n\n"
         f"{text}"
     )
 
@@ -820,6 +836,7 @@ def run_pipeline(
         final_text, ai_review_metadata = review_transcript_with_openai(
             text=raw_text,
             model=ai_review_model,
+            language=language,
             domain_prompt=domain_prompt,
             progress_callback=progress_callback,
         )
@@ -853,6 +870,7 @@ def run_pipeline(
         "segments": segments,
         "speaker_turns": speaker_turns,
         "metadata": metadata,
+        "language": metadata.get("language", language),
         "device": resolved_device,
         "compute_type": resolved_compute_type,
         "diarization_enabled": diarization_enabled,

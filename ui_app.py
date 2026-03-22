@@ -19,6 +19,7 @@ from transcribe_local import (
     PipelineError,
     SUPPORTED_AI_REVIEW_MODELS,
     SUPPORTED_EXTENSIONS,
+    SUPPORTED_UI_LANGUAGES,
     load_env_file,
     run_pipeline,
 )
@@ -29,15 +30,29 @@ UPLOADS_DIR = RUNTIME_DIR / "web_uploads"
 RUNS_DIR = RUNTIME_DIR / "web_runs"
 ALLOWED_EXTENSIONS = sorted(SUPPORTED_EXTENSIONS)
 MODEL_PROFILES = {
-    "quality": {
-        "model": "large-v3",
-        "label": "Massima accuratezza",
-        "description": "large-v3: piu lento, ma migliore per qualita generale e italiano.",
+    "quality": {"label": "Massima accuratezza"},
+    "speed": {"label": "Più veloce"},
+}
+MODEL_PROFILE_CHOICES = {
+    "it": {
+        "quality": {
+            "model": "large-v3",
+            "description": "large-v3: più lento, ma migliore per qualità generale in italiano.",
+        },
+        "speed": {
+            "model": "large-v3-turbo",
+            "description": "large-v3-turbo: più rapido, con lieve calo di qualità ma buona resa multilingua.",
+        },
     },
-    "speed": {
-        "model": "large-v3-turbo",
-        "label": "Piu veloce",
-        "description": "large-v3-turbo: molto rapido, con lieve calo di qualita.",
+    "en": {
+        "quality": {
+            "model": "large-v3",
+            "description": "large-v3: più lento, ma molto solido anche per inglese.",
+        },
+        "speed": {
+            "model": "large-v3-turbo",
+            "description": "large-v3-turbo: più rapido e stabile anche per inglese, con lieve calo di qualità.",
+        },
     },
 }
 
@@ -70,15 +85,33 @@ def parse_optional_int(value: str | None) -> int | None:
     return int(value)
 
 
+def render_context(**updates) -> dict:
+    context = {
+        "allowed_extensions": ", ".join(ALLOWED_EXTENSIONS),
+        "model_profiles": MODEL_PROFILES,
+        "model_profile_choices": MODEL_PROFILE_CHOICES,
+        "supported_languages": SUPPORTED_UI_LANGUAGES,
+        "ai_review_models": sorted(SUPPORTED_AI_REVIEW_MODELS),
+        "default_ai_review_model": DEFAULT_AI_REVIEW_MODEL,
+        "current_job": None,
+        "result": None,
+        "error": None,
+    }
+    context.update(updates)
+    return context
+
+
 def resolve_model(form) -> tuple[str, str]:
+    language = (form.get("language") or "it").strip()
     profile = (form.get("quality_profile") or "quality").strip()
     manual_model = (form.get("model") or "large-v3").strip()
 
     if profile == "custom":
         return manual_model, profile
 
-    if profile in MODEL_PROFILES:
-        return MODEL_PROFILES[profile]["model"], profile
+    language_profiles = MODEL_PROFILE_CHOICES.get(language, MODEL_PROFILE_CHOICES["it"])
+    if profile in language_profiles:
+        return language_profiles[profile]["model"], profile
 
     return "large-v3", "quality"
 
@@ -96,6 +129,23 @@ def get_job(job_id: str) -> dict | None:
         if job is None:
             return None
         return dict(job)
+
+
+def resolve_output_file(job_id: str, file_kind: str) -> Path | None:
+    allowed_kinds = {"txt", "srt", "json", "raw_txt"}
+    if file_kind not in allowed_kinds:
+        return None
+
+    job_dir = RUNS_DIR / job_id
+    if not job_dir.exists():
+        return None
+
+    pattern = "*.raw.txt" if file_kind == "raw_txt" else f"*.{file_kind}"
+    matches = list(job_dir.glob(pattern))
+    if not matches:
+        return None
+
+    return matches[0]
 
 
 def build_rendered_result(
@@ -120,6 +170,8 @@ def build_rendered_result(
         "model": selected_model,
         "quality_profile": selected_profile,
         "quality_profile_label": MODEL_PROFILES.get(selected_profile, {}).get("label", "Scelta manuale"),
+        "language": result["language"],
+        "language_label": SUPPORTED_UI_LANGUAGES.get(result["language"], result["language"]),
         "device": result["device"],
         "diarization_enabled": result["diarization_enabled"],
         "ai_review_enabled": result["ai_review_enabled"],
@@ -159,7 +211,7 @@ def run_job(
             input_path=input_path,
             output_dir=output_dir,
             model=selected_model,
-            language="it",
+            language=form_data["language"],
             device=form_data["device"],
             compute_type=form_data["compute_type"],
             beam_size=form_data["beam_size"],
@@ -215,16 +267,7 @@ def run_job(
 
 @app.get("/")
 def index():
-    return render_template(
-        "index.html",
-        allowed_extensions=", ".join(ALLOWED_EXTENSIONS),
-        model_profiles=MODEL_PROFILES,
-        ai_review_models=sorted(SUPPORTED_AI_REVIEW_MODELS),
-        default_ai_review_model=DEFAULT_AI_REVIEW_MODEL,
-        current_job=None,
-        result=None,
-        error=None,
-    )
+    return render_template("index.html", **render_context())
 
 
 @app.post("/transcribe")
@@ -236,16 +279,7 @@ def transcribe():
         error_message = "Seleziona un file audio o video prima di avviare la trascrizione."
         if expects_json:
             return jsonify({"error": error_message}), 400
-        return render_template(
-            "index.html",
-            allowed_extensions=", ".join(ALLOWED_EXTENSIONS),
-            model_profiles=MODEL_PROFILES,
-            ai_review_models=sorted(SUPPORTED_AI_REVIEW_MODELS),
-            default_ai_review_model=DEFAULT_AI_REVIEW_MODEL,
-            current_job=None,
-            result=None,
-            error=error_message,
-        ), 400
+        return render_template("index.html", **render_context(error=error_message)), 400
 
     if not allowed_file(upload.filename):
         error_message = (
@@ -254,16 +288,7 @@ def transcribe():
         )
         if expects_json:
             return jsonify({"error": error_message}), 400
-        return render_template(
-            "index.html",
-            allowed_extensions=", ".join(ALLOWED_EXTENSIONS),
-            model_profiles=MODEL_PROFILES,
-            ai_review_models=sorted(SUPPORTED_AI_REVIEW_MODELS),
-            default_ai_review_model=DEFAULT_AI_REVIEW_MODEL,
-            current_job=None,
-            result=None,
-            error=error_message,
-        ), 400
+        return render_template("index.html", **render_context(error=error_message)), 400
 
     job_id = build_job_id()
     safe_name = secure_filename(upload.filename) or f"upload{Path(upload.filename).suffix.lower()}"
@@ -282,6 +307,7 @@ def transcribe():
 
     try:
         form_data = {
+            "language": (request.form.get("language") or "it").strip(),
             "device": (request.form.get("device") or "auto").strip(),
             "compute_type": (request.form.get("compute_type") or "").strip() or None,
             "beam_size": parse_optional_int(request.form.get("beam_size")) or 5,
@@ -325,30 +351,12 @@ def transcribe():
         error_message = "I campi numerici non sono validi. Controlla beam size, best of, temperatura e speaker."
         if expects_json:
             return jsonify({"error": error_message}), 400
-        return render_template(
-            "index.html",
-            allowed_extensions=", ".join(ALLOWED_EXTENSIONS),
-            model_profiles=MODEL_PROFILES,
-            ai_review_models=sorted(SUPPORTED_AI_REVIEW_MODELS),
-            default_ai_review_model=DEFAULT_AI_REVIEW_MODEL,
-            current_job=None,
-            result=None,
-            error=error_message,
-        ), 400
+        return render_template("index.html", **render_context(error=error_message)), 400
     except Exception as exc:
         error_message = f"Errore inatteso durante la trascrizione: {exc}"
         if expects_json:
             return jsonify({"error": error_message}), 500
-        return render_template(
-            "index.html",
-            allowed_extensions=", ".join(ALLOWED_EXTENSIONS),
-            model_profiles=MODEL_PROFILES,
-            ai_review_models=sorted(SUPPORTED_AI_REVIEW_MODELS),
-            default_ai_review_model=DEFAULT_AI_REVIEW_MODEL,
-            current_job=None,
-            result=None,
-            error=error_message,
-        ), 500
+        return render_template("index.html", **render_context(error=error_message)), 500
 
     if expects_json:
         return jsonify(
@@ -368,13 +376,11 @@ def job_page(job_id: str):
 
     return render_template(
         "index.html",
-        allowed_extensions=", ".join(ALLOWED_EXTENSIONS),
-        model_profiles=MODEL_PROFILES,
-        ai_review_models=sorted(SUPPORTED_AI_REVIEW_MODELS),
-        default_ai_review_model=DEFAULT_AI_REVIEW_MODEL,
-        current_job=job,
-        result=job.get("result"),
-        error=job.get("error"),
+        **render_context(
+            current_job=job,
+            result=job.get("result"),
+            error=job.get("error"),
+        ),
     )
 
 
@@ -398,20 +404,11 @@ def job_api(job_id: str):
 
 @app.get("/download/<job_id>/<file_kind>")
 def download_file(job_id: str, file_kind: str):
-    allowed_kinds = {"txt", "srt", "json", "raw_txt"}
-    if file_kind not in allowed_kinds:
+    output_file = resolve_output_file(job_id, file_kind)
+    if output_file is None:
         abort(404)
 
-    job_dir = RUNS_DIR / job_id
-    if not job_dir.exists():
-        abort(404)
-
-    pattern = "*.raw.txt" if file_kind == "raw_txt" else f"*.{file_kind}"
-    matches = list(job_dir.glob(pattern))
-    if not matches:
-        abort(404)
-
-    return send_file(matches[0], as_attachment=True, download_name=matches[0].name)
+    return send_file(output_file, as_attachment=True, download_name=output_file.name)
 
 
 if __name__ == "__main__":

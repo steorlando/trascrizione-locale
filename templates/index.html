@@ -16,7 +16,7 @@
           L’esecuzione avviene in locale sul tuo computer usando la pipeline Python che abbiamo creato.
         </p>
         <p class="note">
-          Default consigliato per l’italiano: <strong>Massima accuratezza</strong>, che usa <strong>large-v3</strong>.
+          Default consigliato: <strong>Massima accuratezza</strong>, che usa <strong>large-v3</strong>. Se scegli inglese e priorità velocità, l'app usa automaticamente <strong>distil-large-v3</strong>.
         </p>
         <p class="formats">Formati supportati: {{ allowed_extensions }}</p>
       </section>
@@ -37,6 +37,15 @@
 
           <div class="grid">
             <label class="field">
+              <span>Lingua audio</span>
+              <select name="language" id="language">
+                {% for language_code, language_label in supported_languages.items() %}
+                <option value="{{ language_code }}" {% if language_code == 'it' %}selected{% endif %}>{{ language_label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+
+            <label class="field">
               <span>Priorità</span>
               <select name="quality_profile" id="quality_profile">
                 <option value="quality" selected>Massima accuratezza</option>
@@ -50,6 +59,7 @@
               <select name="model" id="model">
                 <option value="large-v3" selected>large-v3 · più accurato, più lento</option>
                 <option value="large-v3-turbo">large-v3-turbo · molto veloce, meno accurato</option>
+                <option value="distil-large-v3">distil-large-v3 · rapido, consigliato soprattutto per inglese</option>
                 <option value="medium">medium · più leggero, meno accurato</option>
                 <option value="small">small · rapido ma meno accurato</option>
               </select>
@@ -60,7 +70,6 @@
               <select name="device">
                 <option value="auto" selected>auto</option>
                 <option value="cpu">cpu</option>
-                <option value="cuda">cuda</option>
               </select>
             </label>
           </div>
@@ -74,9 +83,12 @@
             <textarea
               name="domain_prompt"
               rows="4"
-              placeholder="sanità pubblica, epidemiologia, health economics, Tor Vergata, Sant’Egidio, Frontiers in Public Health"
+              placeholder="Inserisci parole chiave, nomi propri, sigle, aziende, luoghi o termini tecnici che il modello dovrebbe riconoscere meglio."
             ></textarea>
           </label>
+          <p class="hint">
+            Usa questo campo per dare contesto al modello prima della trascrizione. E utile se l'audio contiene lessico tecnico, nomi propri, sigle o termini poco comuni che vuoi far riconoscere con maggiore precisione.
+          </p>
 
           <div class="grid">
             <label class="field">
@@ -227,17 +239,17 @@
             <p class="eyebrow">Risultato</p>
             <h2>{{ result.input_name }}</h2>
             <p class="meta">
-              Modello: <strong>{{ result.model }}</strong> · Profilo: <strong>{{ result.quality_profile_label }}</strong> · Device: <strong>{{ result.device }}</strong> ·
+              Lingua: <strong>{{ result.language_label }}</strong> · Modello: <strong>{{ result.model }}</strong> · Profilo: <strong>{{ result.quality_profile_label }}</strong> · Device: <strong>{{ result.device }}</strong> ·
               Diarizzazione: <strong>{{ 'attiva' if result.diarization_enabled else 'disattiva' }}</strong> ·
               Revisione AI: <strong>{{ result.ai_review_model if result.ai_review_enabled else 'disattiva' }}</strong>
             </p>
           </div>
           <div class="actions">
-            <a class="download primary" href="{{ url_for('download_file', job_id=result.job_id, file_kind='txt') }}">Scarica TXT</a>
-            <a class="download" href="{{ url_for('download_file', job_id=result.job_id, file_kind='srt') }}">SRT</a>
-            <a class="download" href="{{ url_for('download_file', job_id=result.job_id, file_kind='json') }}">JSON</a>
+            <a class="download primary" data-job-id="{{ result.job_id }}" data-file-kind="txt" href="{{ url_for('download_file', job_id=result.job_id, file_kind='txt') }}">Scarica TXT</a>
+            <a class="download" data-job-id="{{ result.job_id }}" data-file-kind="srt" href="{{ url_for('download_file', job_id=result.job_id, file_kind='srt') }}">SRT</a>
+            <a class="download" data-job-id="{{ result.job_id }}" data-file-kind="json" href="{{ url_for('download_file', job_id=result.job_id, file_kind='json') }}">JSON</a>
             {% if result.raw_txt_name %}
-            <a class="download" href="{{ url_for('download_file', job_id=result.job_id, file_kind='raw_txt') }}">TXT grezzo</a>
+            <a class="download" data-job-id="{{ result.job_id }}" data-file-kind="raw_txt" href="{{ url_for('download_file', job_id=result.job_id, file_kind='raw_txt') }}">TXT grezzo</a>
             {% endif %}
           </div>
         </div>
@@ -254,6 +266,7 @@
       const submitButton = document.getElementById("submit_button");
       const submitState = document.getElementById("submit_state");
       const formError = document.getElementById("form_error");
+      const languageSelect = document.getElementById("language");
       const profileSelect = document.getElementById("quality_profile");
       const modelSelect = document.getElementById("model");
       const profileHint = document.getElementById("profile_hint");
@@ -266,6 +279,7 @@
       const progressMessage = document.getElementById("progress_message");
       const jobStatusLabel = document.getElementById("job_status_label");
       const jobStageLabel = document.getElementById("job_stage_label");
+      const downloadLinks = document.querySelectorAll(".download[data-job-id][data-file-kind]");
 
       if (transcribeForm && submitButton && submitState) {
         transcribeForm.addEventListener("submit", async (event) => {
@@ -310,22 +324,32 @@
       }
 
       if (profileSelect && modelSelect && profileHint) {
-        const profiles = {
-          quality: {
-            model: "large-v3",
-            hint: "`Massima accuratezza` usa `large-v3`, consigliato quando la qualità è più importante della velocità."
-          },
-          speed: {
-            model: "large-v3-turbo",
-            hint: "`Più veloce` usa `large-v3-turbo`, che resta multilingua ed è più adatto dell’opzione distillata per audio in italiano."
-          },
-          custom: {
-            model: modelSelect.value,
-            hint: "`Scelta manuale` ti lascia decidere esattamente quale modello usare."
-          }
+        const profileChoices = {{ model_profile_choices | tojson }};
+        const defaultLanguage = languageSelect ? languageSelect.value : "it";
+
+        const buildProfiles = (languageCode) => {
+          const languageProfiles = profileChoices[languageCode] || profileChoices.it;
+          return {
+            quality: {
+              model: languageProfiles.quality.model,
+              hint: `Massima accuratezza usa ${languageProfiles.quality.model}, consigliato quando la qualità è più importante della velocità.`
+            },
+            speed: {
+              model: languageProfiles.speed.model,
+              hint: `Più veloce usa ${languageProfiles.speed.model}.`
+            },
+            custom: {
+              model: modelSelect.value,
+              hint: "`Scelta manuale` ti lascia decidere esattamente quale modello usare."
+            }
+          };
         };
 
+        let profiles = buildProfiles(defaultLanguage);
+
         const syncProfileUi = () => {
+          const languageCode = languageSelect ? languageSelect.value : "it";
+          profiles = buildProfiles(languageCode);
           const selected = profiles[profileSelect.value] || profiles.quality;
           if (profileSelect.value !== "custom") {
             modelSelect.value = selected.model;
@@ -337,21 +361,29 @@
         };
 
         profileSelect.addEventListener("change", syncProfileUi);
+        if (languageSelect) {
+          languageSelect.addEventListener("change", syncProfileUi);
+        }
         syncProfileUi();
       }
 
       if (aiReviewCheckbox && aiReviewModel && aiReviewHint) {
         const syncAiReviewUi = () => {
+          const languageCode = languageSelect ? languageSelect.value : "it";
+          const languageLabel = languageCode === "en" ? "English" : "italiano";
           if (aiReviewCheckbox.checked) {
             aiReviewModel.removeAttribute("disabled");
-            aiReviewHint.textContent = "La revisione AI e attiva: il testo finale verra ripulito da OpenAI con correzioni conservative e punteggiatura.";
+            aiReviewHint.textContent = `La revisione AI e attiva: il testo finale verra ripulito da OpenAI come trascrizione in ${languageLabel}, con correzioni conservative e punteggiatura.`;
           } else {
             aiReviewModel.setAttribute("disabled", "disabled");
-            aiReviewHint.textContent = "Revisione AI facoltativa: usa OpenAI solo sul testo trascritto finale, non sull’audio. Default consigliato: `gpt-4.1-mini`.";
+            aiReviewHint.textContent = `Revisione AI facoltativa: usa OpenAI solo sul testo trascritto finale, non sull’audio, e segue la lingua scelta (${languageLabel}). Default consigliato: gpt-4.1-mini.`;
           }
         };
 
         aiReviewCheckbox.addEventListener("change", syncAiReviewUi);
+        if (languageSelect) {
+          languageSelect.addEventListener("change", syncAiReviewUi);
+        }
         syncAiReviewUi();
       }
 
@@ -394,6 +426,46 @@
         };
 
         window.setTimeout(refreshJob, 900);
+      }
+
+      if (downloadLinks.length > 0) {
+        const desktopDownload = async (event) => {
+          const link = event.currentTarget;
+          if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.save_output_file) {
+            return;
+          }
+
+          event.preventDefault();
+          const originalLabel = link.textContent;
+          link.textContent = "Salvataggio...";
+          link.classList.add("disabled");
+
+          try {
+            const result = await window.pywebview.api.save_output_file(
+              link.dataset.jobId,
+              link.dataset.fileKind
+            );
+
+            if (!result || result.cancelled) {
+              return;
+            }
+            if (!result.ok) {
+              throw new Error(result.error || "Salvataggio non riuscito.");
+            }
+          } catch (error) {
+            if (formError) {
+              formError.textContent = error.message || "Salvataggio non riuscito.";
+              formError.hidden = false;
+            }
+          } finally {
+            link.textContent = originalLabel;
+            link.classList.remove("disabled");
+          }
+        };
+
+        downloadLinks.forEach((link) => {
+          link.addEventListener("click", desktopDownload);
+        });
       }
     </script>
   </body>

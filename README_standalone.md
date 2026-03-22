@@ -10,7 +10,7 @@ La vecchia app-launcher basata su Terminale e browser puo restare come fallback 
 
 1. Costruisci la app con lo script di build.
 2. Apri `Trascrizione Locale.app`.
-2. Si apre direttamente la finestra dell'app.
+2. Nel Dock e nella finestra il nome visualizzato sara `Trascrivi!`.
 3. Carica il file audio/video e avvia la trascrizione.
 
 ## Dove salva i dati

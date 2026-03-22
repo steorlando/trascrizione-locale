@@ -16,3 +16,4 @@ output_transcripts/
 =1.0,
 launch_ui.applescript
 assets/*.iconset/
+.codex/

@@ -116,8 +116,8 @@ app = BUNDLE(
     icon=str(icon_path) if icon_path.exists() else None,
     bundle_identifier="local.transcription.app",
     info_plist={
-        "CFBundleName": "Trascrizione Locale",
-        "CFBundleDisplayName": "Trascrizione Locale",
+        "CFBundleName": "Trascrivi!",
+        "CFBundleDisplayName": "Trascrivi!",
         "CFBundleShortVersionString": "2.0",
         "CFBundleVersion": "2",
         "LSMinimumSystemVersion": "12.0",
