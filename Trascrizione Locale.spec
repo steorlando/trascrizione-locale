@@ -33,6 +33,7 @@ for package_name in (
     "ctranslate2",
     "imageio_ffmpeg",
     "pyannote.audio",
+    "lightning_fabric",
 ):
     pkg_datas, pkg_binaries, pkg_hiddenimports = collect_all(package_name)
     datas += pkg_datas
@@ -40,6 +41,7 @@ for package_name in (
     hiddenimports += pkg_hiddenimports
 
 datas += collect_data_files("webview")
+datas += collect_data_files("lightning_fabric", includes=["version.info"])
 hiddenimports += collect_submodules("webview.platforms")
 
 for package_name in ("torch", "torchaudio", "soundfile"):
@@ -54,6 +56,7 @@ for distribution_name in (
     "pyannote.audio",
     "huggingface_hub",
     "imageio-ffmpeg",
+    "lightning",
 ):
     try:
         datas += copy_metadata(distribution_name)
